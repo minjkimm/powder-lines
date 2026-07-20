@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Powder Lines · Tyrol v0.9</title>
+<title>Powder Lines · Tyrol v0.11</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -44,13 +44,16 @@ h1{font-family:'Space Grotesk',sans-serif;font-size:16px;line-height:1.1}
 #zones_d summary::-webkit-details-marker{display:none}
 #zones_d summary:after{content:"▸";color:var(--dim);font-size:10px}
 #zones_d[open] summary:after{content:"▾"}
-.rrow{display:grid;grid-template-columns:150px 1fr;gap:1px 8px;align-items:center;padding:4px 7px;border:1px solid var(--hair);border-radius:8px;cursor:pointer;background:#fff}
+.rrow{display:flex;flex-direction:column;gap:3px;padding:5px 8px;border:1px solid var(--hair);border-radius:8px;cursor:pointer;background:#fff}
 .rrow:hover{border-color:var(--glacial)}
 .rrow.cur{border-color:var(--glacial);background:#F2F8FB}
-.rname{font-family:'Space Grotesk',sans-serif;font-size:11.5px;font-weight:600;white-space:nowrap}
-.rbar{height:6px;background:#EDF2F5;border-radius:3px;overflow:hidden;display:block}
+.rname{font-family:'Space Grotesk',sans-serif;font-size:11.5px;font-weight:600}
+.rbar{height:5px;width:100%;background:#EDF2F5;border-radius:3px;overflow:hidden;display:block}
 .rbar span{display:block;height:100%}
-.rmeta{grid-column:1/3;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim)}
+.rmeta{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim)}
+.rlink{color:var(--glacial);text-decoration:none}
+.rlink:hover{text-decoration:underline}
+.leaflet-popup-content a{color:var(--glacial);font-size:11px}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);margin-top:6px}
 .sw{width:14px;height:4px;border-radius:2px;display:inline-block;vertical-align:middle}
 .leaflet-popup-content{font-family:'Inter',sans-serif;font-size:12px;line-height:1.45;margin:10px 12px}
@@ -64,7 +67,7 @@ h1{font-family:'Space Grotesk',sans-serif;font-size:16px;line-height:1.1}
 <body>
 <div id="app">
 <header>
-  <div class="eyebrow">Powder Lines · Tirol &amp; Vorarlberg · v0.9</div>
+  <div class="eyebrow">Powder Lines · Tirol &amp; Vorarlberg · v0.11</div>
   <div class="hrow">
     <h1>Which line skis deep?</h1>
     <select id="i_area">
@@ -218,31 +221,36 @@ const MIRRORS=[
  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
  "https://overpass.kumi.systems/api/interpreter"];
 async function loadRoutes(area,areaKey){
-  // server-side cap (out geom 60) keeps dense areas like Arlberg from timing out on payload size
-  const q=`[out:json][timeout:15];way["piste:type"="skitour"](${area.bbox});out geom 60;`;
+  // one query: skitour ways (capped 60) + named peaks and villages for orientation labels
+  const q=`[out:json][timeout:15];way["piste:type"="skitour"](${area.bbox});out geom 60;`
+    +`(node["natural"="peak"]["name"](${area.bbox});node["place"~"^(village|hamlet|town|locality)$"]["name"](${area.bbox}););out 250;`;
   // race all mirrors in PARALLEL; first good answer wins, slow mirrors just lose
   const attempts=MIRRORS.map(m=>(async()=>{
     const r=await fetchT(m+"?data="+encodeURIComponent(q),12000);
     if(!r.ok)throw new Error(new URL(m).hostname+" HTTP "+r.status);
     const j=await r.json();
-    const ways=(j.elements||[]).filter(w=>w.geometry&&w.geometry.length>3);
+    const els=j.elements||[];
+    const ways=els.filter(w=>w.type==="way"&&w.geometry&&w.geometry.length>3);
     if(!ways.length)throw new Error("ZERO"); // valid answer, but let a fuller mirror win the race
-    return {m,ways};
+    const nodes=els.filter(n=>n.type==="node"&&n.tags&&n.tags.name);
+    return {m,ways,
+      peaks:nodes.filter(n=>n.tags.natural==="peak").map(n=>({name:n.tags.name,lat:n.lat,lon:n.lon,ele:+n.tags.ele||null})),
+      places:nodes.filter(n=>n.tags.place).map(n=>({name:n.tags.name,lat:n.lat,lon:n.lon}))};
   })());
   try{
-    const {m,ways:w0}=await Promise.any(attempts);
+    const {m,ways:w0,peaks,places}=await Promise.any(attempts);
     let ways=w0.sort((a,b)=>b.geometry.length-a.geometry.length).slice(0,30);
-    return {src:`OSM live · ${ways.length} · ${new URL(m).hostname}`,
+    return {src:`OSM live · ${ways.length} · ${new URL(m).hostname}`,peaks,places,
       runs:ways.map((w,i)=>({name:(w.tags&&(w.tags.name||w.tags.ref))||`Skitour ${i+1}`,
-        pts:w.geometry.map(g=>({lat:g.lat,lon:g.lon}))}))};
+        osmId:w.id, pts:w.geometry.map(g=>({lat:g.lat,lon:g.lon}))}))};
   }catch(agg){
     const errs=(agg.errors||[]).map(e=>e.message);
     // every mirror answered "zero" -> genuinely unmapped box
-    if(errs.length&&errs.every(e=>e==="ZERO"))return {src:"OSM live · 0 routes mapped here",runs:[]};
+    if(errs.length&&errs.every(e=>e==="ZERO"))return {src:"OSM live · 0 routes mapped here",runs:[],peaks:[],places:[]};
     const lastErr=errs.filter(e=>e!=="ZERO").slice(-1)[0]||"no response";
-    if(areaKey==="sellrain")return {src:"starter set · 5 classics, approx lines (Overpass unreachable: "+lastErr+")",
-      runs:STARTER.map(f=>({name:f.name,pts:f.pts.map(p=>({lat:p[0],lon:p[1]}))}))};
-    return {src:"unavailable ("+lastErr+")",runs:[]};
+    if(areaKey==="sellrain")return {src:"starter set · 5 classics, approx lines (Overpass unreachable: "+lastErr+")",peaks:[],places:[],
+      runs:STARTER.map(f=>({name:f.name,approx:true,pts:f.pts.map(p=>({lat:p[0],lon:p[1]}))}))};
+    return {src:"unavailable ("+lastErr+")",runs:[],peaks:[],places:[]};
   }
 }
 async function loadElev(runs){
@@ -473,19 +481,31 @@ function render(){
     const vert=Math.round(run.segs.reduce((s,g)=>s+Math.max(g.drop,0),0));
     const marker=L.circleMarker([tops.a.lat,tops.a.lon],{radius:7,color:"#17516F",fillColor:"#fff",fillOpacity:1,weight:2}).addTo(layerGroup);
     marker.bindPopup(`<b>${run.name}</b><br>
+      ${run.start||run.summit?`${run.start?"start: "+run.start:""}${run.start&&run.summit?" · ":""}${run.summit?"summit: "+run.summit:""}<br>`:""}
       ${Math.round(tops.elevTop)}m → ${Math.round(ends.b.elev)}m · ${vert}m vert<br>
       Overall <b>${avg}/100</b> · top ${tAvg(top)} / exit ${tAvg(bot)}
       <div class="verdict">${
         gatedSegs?`<span class="gatenote">⚠ ${gatedSegs} segment(s) gated by danger.</span><br>`:""}
         Top: <b>${label(tAvg(top))}</b> · Exit: ${label(tAvg(bot))}${p.fl>=ends.b.elev?" (below freezing level, expect mank)":""}
-      </div>`);
-    stats.push({idx:runIdx,name:run.name,avg,vert,gatedSegs,
+      </div>${run.osmId?`<a href="https://www.openstreetmap.org/way/${run.osmId}" target="_blank" rel="noopener">View route on OpenStreetMap ↗</a>`:""}`);
+    stats.push({idx:runIdx,name:run.name,avg,vert,gatedSegs,osmId:run.osmId,run,
       elevTop:tops.elevTop,elevBot:ends.b.elev,marker,
       bounds:L.latLngBounds(run.samples.map(s=>[s.lat,s.lon]))});
   });
   $("runcount").textContent=RUNS.length+" runs scored";
   renderRunList(stats);
   renderRanking(p);
+}
+function gpxFor(run){ // full OSM geometry, generated client-side
+  const esc=t=>t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const pts=run.pts.map(p=>`<trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"/>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Powder Lines" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>${esc(run.name)}</name><trkseg>${pts}</trkseg></trk></gpx>`;
+}
+function dlGpx(run){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([gpxFor(run)],{type:"application/gpx+xml"}));
+  a.download=run.name.replace(/[^\w]+/g,"_")+".gpx";a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
 function renderRunList(stats){
   stats.sort((a,b)=>b.avg-a.avg);
@@ -495,11 +515,19 @@ function renderRunList(stats){
       <span class="rname">${i+1}. ${s.name}</span>
       <span class="rbar"><span style="width:${s.avg}%;background:${s.gatedSegs?"#ED1C24":"#3D7EA6"}"></span></span>
       <span class="rmeta">${s.avg}/100 · ${label(s.avg)} · ${s.vert}m vert · ${Math.round(s.elevTop)}→${Math.round(s.elevBot)}m${s.gatedSegs?` · ⚠ ${s.gatedSegs} gated`:""}</span>
+      <span class="rmeta">${[s.run.start?"start: "+s.run.start:null,s.run.summit?"summit: "+s.run.summit:null].filter(Boolean).join(" · ")}${(s.run.start||s.run.summit)?" · ":""}${
+        s.osmId?`<a class="rlink" href="https://www.openstreetmap.org/way/${s.osmId}" target="_blank" rel="noopener">OSM ↗</a> · <a class="rlink gpxl" href="#" data-i="${s.idx}">GPX ↓</a>`
+        :"approx line · no GPX"}</span>
     </div>`).join("")
    :`<div class="rmeta" style="padding:4px 6px">No runs in memory. Routes pill says: "${status.routes}" — "0 routes mapped here" = OSM has no skitour lines in this box; "unavailable" = the route server couldn't be reached from your browser.</div>`;
   document.querySelectorAll(".runrow").forEach(el=>el.addEventListener("click",()=>{
     const s=stats.find(x=>x.idx==+el.dataset.i);if(!s)return;
     map.fitBounds(s.bounds.pad(0.25));s.marker.openPopup();
+  }));
+  document.querySelectorAll(".rlink").forEach(el=>el.addEventListener("click",e=>{
+    e.stopPropagation(); // links shouldn't also trigger the row's zoom
+    if(el.classList.contains("gpxl")){e.preventDefault();
+      const s=stats.find(x=>x.idx==+el.dataset.i);if(s)dlGpx(s.run);}
   }));
 }
 document.querySelectorAll("#panel input,#panel select").forEach(el=>{
@@ -514,7 +542,7 @@ async function loadArea(){
   layerGroup.clearLayers();$("runcount").textContent="loading…";
   let osmDone=false;
   if(key==="sellrain"){ // instant starter set so the screen is never empty while OSM races
-    const st=STARTER.map(f=>({name:f.name,pts:f.pts.map(p=>({lat:p[0],lon:p[1]}))}));
+    const st=STARTER.map(f=>({name:f.name,approx:true,pts:f.pts.map(p=>({lat:p[0],lon:p[1]}))}));
     loadElev(st).then(()=>{
       if(gen!==loadGen||osmDone)return;
       st.forEach(buildSegs);
@@ -522,7 +550,7 @@ async function loadArea(){
       if(ok.length&&!osmDone){RUNS=ok;status.routes="starter set · OSM loading…";paintStatus();render();}
     });
   }
-  const {src,runs}=await loadRoutes(area,key);
+  const {src,runs,peaks,places}=await loadRoutes(area,key);
   osmDone=true;
   if(gen!==loadGen)return;              // a newer area switch happened; discard this result
   status.routes=src;paintStatus();
@@ -537,6 +565,23 @@ async function loadArea(){
   status.elev=elevSrc;paintStatus();
   runs.forEach(buildSegs);
   RUNS=runs.filter(r=>r.segs.length>2);
+  // orientation for strangers: nearest named peak to the top, nearest village to the exit
+  const nearest=(list,pt,maxM)=>{let best=null,bd=maxM;
+    (list||[]).forEach(o=>{const d=dist(o,pt);if(d<bd){bd=d;best=o;}});return best;};
+  RUNS.forEach(r=>{
+    const top=r.segs[0].a, bot=r.segs[r.segs.length-1].b;
+    const pk=nearest(peaks,top,1500), pl=nearest(places,bot,4000);
+    r.summit=pk?pk.name+(pk.ele?` (${Math.round(pk.ele)}m)`:""):null;
+    r.start=pl?pl.name:null;
+    if(/^Skitour \d+$/.test(r.name)){ // unnamed OSM way: build a name from real geography
+      const ski=r.segs.filter(g=>!g.ascent);
+      let facing="";
+      if(ski.length){let x=0,y=0;ski.forEach(g=>{x+=Math.cos(rad(g.aspect))*g.len;y+=Math.sin(rad(g.aspect))*g.len;});
+        facing=aspName((Math.atan2(y,x)*180/Math.PI+360)%360);}
+      if(pl&&pk)r.name=`${pl.name} → ${pk.name}${facing?" · "+facing:""}`;
+      else if(pk)r.name=`${pk.name}${facing?" · "+facing+" line":""}`;
+      else if(facing)r.name+=" · "+facing+" facing";
+    }});
   if(RUNS.length){                      // only reframe the map when we actually have lines in THIS area
     const b=L.latLngBounds(RUNS.flatMap(r=>r.samples.map(s=>[s.lat,s.lon])));
     if(b.isValid())map.fitBounds(b.pad(0.1));
