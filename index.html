@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Powder Lines · Tyrol v0.11</title>
+<title>Powder Lines · Tyrol v0.12</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -41,9 +41,9 @@ h1{font-family:'Space Grotesk',sans-serif;font-size:16px;line-height:1.1}
 .mode.on{background:var(--glacial);color:#fff;border-color:var(--glacial)}
 #i_date{font-family:'JetBrains Mono',monospace;font-size:10px;padding:1px 4px;border:1px solid var(--hair);border-radius:6px;color:var(--ink)}
 #ranking,#runlist{display:flex;flex-direction:column;gap:3px;margin-bottom:4px}
-#zones_d summary::-webkit-details-marker{display:none}
-#zones_d summary:after{content:"▸";color:var(--dim);font-size:10px}
-#zones_d[open] summary:after{content:"▾"}
+#zones_d summary::-webkit-details-marker,#runs_d summary::-webkit-details-marker{display:none}
+#zones_d summary:after,#runs_d summary:after{content:"▸";color:var(--dim);font-size:10px}
+#zones_d[open] summary:after,#runs_d[open] summary:after{content:"▾"}
 .rrow{display:flex;flex-direction:column;gap:3px;padding:5px 8px;border:1px solid var(--hair);border-radius:8px;cursor:pointer;background:#fff}
 .rrow:hover{border-color:var(--glacial)}
 .rrow.cur{border-color:var(--glacial);background:#F2F8FB}
@@ -67,7 +67,7 @@ h1{font-family:'Space Grotesk',sans-serif;font-size:16px;line-height:1.1}
 <body>
 <div id="app">
 <header>
-  <div class="eyebrow">Powder Lines · Tirol &amp; Vorarlberg · v0.11</div>
+  <div class="eyebrow">Powder Lines · Tirol &amp; Vorarlberg · v0.12</div>
   <div class="hrow">
     <h1>Which line skis deep and worth skinning?</h1>
     <select id="i_area">
@@ -85,11 +85,13 @@ h1{font-family:'Space Grotesk',sans-serif;font-size:16px;line-height:1.1}
 </header>
 <div id="map"></div>
 <div id="panel">
-  <div class="sec">Runs <span class="secnote" id="run_note"></span></div>
-  <div id="runlist"></div>
-  <details id="zones_d">
-    <summary class="sec" style="cursor:pointer">Neighborhood ranking <span class="secnote" id="rank_note"></span></summary>
+  <details id="zones_d" open>
+    <summary class="sec" style="cursor:pointer">1 · Pick your neighborhood <span class="secnote" id="rank_note"></span></summary>
     <div id="ranking"></div>
+  </details>
+  <details id="runs_d" open>
+    <summary class="sec" style="cursor:pointer">2 · Pick your line <span class="secnote" id="run_note"></span></summary>
+    <div id="runlist"></div>
   </details>
   <div class="sec">Storm
     <button class="mode" id="m_live">Live</button>
@@ -509,7 +511,7 @@ function dlGpx(run){
 }
 function renderRunList(stats){
   stats.sort((a,b)=>b.avg-a.avg);
-  $("run_note").textContent=stats.length?stats.length+" in memory · click to zoom":"0 in memory";
+  $("run_note").textContent=stats.length?stats.length+" runs · click to zoom":"no runs loaded";
   $("runlist").innerHTML=stats.length?stats.map((s,i)=>`
     <div class="rrow runrow" data-i="${s.idx}">
       <span class="rname">${i+1}. ${s.name}</span>
@@ -519,7 +521,7 @@ function renderRunList(stats){
         s.osmId?`<a class="rlink" href="https://www.openstreetmap.org/way/${s.osmId}" target="_blank" rel="noopener">OSM ↗</a> · <a class="rlink gpxl" href="#" data-i="${s.idx}">GPX ↓</a>`
         :"approx line · no GPX"}</span>
     </div>`).join("")
-   :`<div class="rmeta" style="padding:4px 6px">No runs in memory. Routes pill says: "${status.routes}" — "0 routes mapped here" = OSM has no skitour lines in this box; "unavailable" = the route server couldn't be reached from your browser.</div>`;
+   :`<div class="rmeta" style="padding:4px 6px">No runs loaded. Routes pill says: "${status.routes}" — "0 routes mapped here" = OSM has no skitour lines in this box; "unavailable" = the route server couldn't be reached from your browser.</div>`;
   document.querySelectorAll(".runrow").forEach(el=>el.addEventListener("click",()=>{
     const s=stats.find(x=>x.idx==+el.dataset.i);if(!s)return;
     map.fitBounds(s.bounds.pad(0.25));s.marker.openPopup();
