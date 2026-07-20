@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Powder Lines · Tyrol v0.12</title>
+<title>Powder Lines · Tyrol v0.13</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -67,7 +67,7 @@ h1{font-family:'Space Grotesk',sans-serif;font-size:16px;line-height:1.1}
 <body>
 <div id="app">
 <header>
-  <div class="eyebrow">Powder Lines · Tirol &amp; Vorarlberg · v0.12</div>
+  <div class="eyebrow">Powder Lines · Tirol &amp; Vorarlberg · v0.13</div>
   <div class="hrow">
     <h1>Which line skis deep and worth skinning?</h1>
     <select id="i_area">
@@ -96,7 +96,7 @@ h1{font-family:'Space Grotesk',sans-serif;font-size:16px;line-height:1.1}
   <div class="sec">Storm
     <button class="mode" id="m_live">Live</button>
     <button class="mode" id="m_replay">Replay</button>
-    <input type="date" id="i_date" value="2026-03-10" min="2000-01-01">
+    <input type="date" id="i_date" value="2026-03-27" min="2000-01-01">
     <button class="mode" id="m_sim">Simulate</button>
   </div>
   <div class="row">
@@ -600,8 +600,7 @@ $("i_area").addEventListener("change",async()=>{
 });
 (async()=>{
   await loadArea();
-  const m=new Date().getMonth(); // bulletin season (Nov–May): boot live; summer: boot replay
-  if([10,11,0,1,2,3,4].includes(m)){applyLiveWeather();}else{applyReplay();}
+  applyReplay(); // land on real data: this region's biggest 48h dump of 2026
 })();
 </script>
 </body>
