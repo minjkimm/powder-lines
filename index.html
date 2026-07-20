@@ -197,7 +197,7 @@ const aspName=d=>ASP[Math.round(d/45)%8];
 function fetchT(url,ms){ // fetch with a real timeout
   const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);
   return fetch(url,{signal:c.signal}).finally(()=>clearTimeout(t));}
-const CACHE_VER="pl1"; // 24h route+elevation cache: terrain doesn't change daily
+const CACHE_VER="pl2"; // 24h route+elevation cache: terrain doesn't change daily
 function cacheGet(k){try{const o=JSON.parse(localStorage.getItem(k));
   if(o&&o.v===CACHE_VER&&Date.now()-o.t<86400e3)return o.d;}catch(e){}return null;}
 function cachePut(k,d){try{localStorage.setItem(k,JSON.stringify({v:CACHE_VER,t:Date.now(),d}));}catch(e){}}
@@ -598,7 +598,7 @@ async function loadArea(){
       else if(pk)r.name=`${pk.name}${facing?" · "+facing+" line":""}`;
       else if(facing)r.name+=" · "+facing+" facing";
     }});
-  cachePut("pl_area_"+key,{src,elev:elevSrc,
+  if(src.startsWith("OSM live"))cachePut("pl_area_"+key,{src,elev:elevSrc,
     runs:RUNS.map(r=>({name:r.name,osmId:r.osmId,approx:r.approx,start:r.start,summit:r.summit,pts:r.pts,samples:r.samples}))});
   render();
   if(RUNS.length){                      // only reframe the map when we actually have lines in THIS area
