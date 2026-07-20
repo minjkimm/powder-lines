@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Powder Lines · PNW v0.1</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--paper:#F2F5F7;--card:#fff;--ink:#1B242C;--dim:#5C6B76;--hair:#D8E0E6;--glacial:#3D7EA6;--deep:#17516F;--d3:#F7941E;--d4:#ED1C24;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink)}
+#app{display:flex;flex-direction:column;height:100vh}
+header{padding:10px 14px 8px;background:var(--card);border-bottom:1px solid var(--hair)}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--glacial)}
+.hrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+h1{font-family:'Space Grotesk',sans-serif;font-size:16px;line-height:1.1}
+#i_area{padding:3px 6px;border:1px solid var(--hair);border-radius:6px;font-size:11px;background:#fff;font-family:'JetBrains Mono',monospace}
+#status{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.pill{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 8px;border-radius:10px;background:#EDF2F5;color:var(--dim);border:1px solid var(--hair)}
+.pill.ok{background:#E4F3E6;color:#2E7D36;border-color:#BFE3C4}
+.pill.warn{background:#FDF0E0;color:#B26A0F;border-color:#F3D9B0}
+.pill.err{background:#FCE4E4;color:#B3261E;border-color:#F2BFBF}
+#map{flex:1}
+.terraintiles{filter:grayscale(.7) brightness(1.08) contrast(.9)} /* mute the topo basemap when active */
+.basectl{background:#fff;border:1px solid var(--hair);border-radius:10px;padding:2px;display:flex;gap:2px}
+.basectl button{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 8px;border:none;background:transparent;border-radius:8px;cursor:pointer;color:var(--dim)}
+.basectl button.on{background:var(--glacial);color:#fff}
+#panel{background:var(--card);border-top:1px solid var(--hair);padding:10px 14px;max-height:52vh;overflow:auto}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.field label{display:block;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim)}
+.field input[type=range]{width:100%;accent-color:var(--glacial)}
+.field input[type=range]:disabled{opacity:.45}
+.field select{width:100%;padding:4px 6px;border:1px solid var(--hair);border-radius:6px;font-size:12px;background:#fff}
+.field select:disabled{opacity:.45}
+.val{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink)}
+.sec{font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:600;margin:8px 0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.secnote{font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:400;color:var(--dim);text-transform:none;letter-spacing:0}
+.mode{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 9px;border:1px solid var(--hair);background:#fff;border-radius:10px;cursor:pointer;color:var(--dim)}
+.mode.on{background:var(--glacial);color:#fff;border-color:var(--glacial)}
+#i_date{font-family:'JetBrains Mono',monospace;font-size:10px;padding:1px 4px;border:1px solid var(--hair);border-radius:6px;color:var(--ink)}
+#ranking,#runlist{display:flex;flex-direction:column;gap:3px;margin-bottom:4px}
+#zones_d summary::-webkit-details-marker,#runs_d summary::-webkit-details-marker{display:none}
+#zones_d summary:after,#runs_d summary:after{content:"▸";color:var(--dim);font-size:10px}
+#zones_d[open] summary:after,#runs_d[open] summary:after{content:"▾"}
+.rrow{display:flex;flex-direction:column;gap:3px;padding:5px 8px;border:1px solid var(--hair);border-radius:8px;cursor:pointer;background:#fff}
+.rrow:hover{border-color:var(--glacial)}
+.rrow.cur{border-color:var(--glacial);background:#F2F8FB}
+.rname{font-family:'Space Grotesk',sans-serif;font-size:11.5px;font-weight:600}
+.rbar{height:5px;width:100%;background:#EDF2F5;border-radius:3px;overflow:hidden;display:block}
+.rbar span{display:block;height:100%}
+.rmeta{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim)}
+.rlink{color:var(--glacial);text-decoration:none}
+.rlink:hover{text-decoration:underline}
+.leaflet-popup-content a{color:var(--glacial);font-size:11px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);margin-top:6px}
+.sw{width:14px;height:4px;border-radius:2px;display:inline-block;vertical-align:middle}
+.leaflet-popup-content{font-family:'Inter',sans-serif;font-size:12px;line-height:1.45;margin:10px 12px}
+.leaflet-popup-content b{font-family:'Space Grotesk',sans-serif}
+.verdict{margin-top:4px;padding:6px 8px;background:#F2F5F7;border-radius:6px;font-size:11.5px}
+.gatenote{color:var(--d4);font-weight:600}
+.disc{font-size:9.5px;color:var(--dim);margin-top:8px;line-height:1.4}
+.disc b{color:var(--d4)}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <div class="eyebrow">Powder Lines · PNW · Washington &amp; Hood · v0.1 · <a href="../" style="color:var(--glacial)">Alps version ↗</a></div>
+  <div class="hrow">
+    <h1>Which line skis deep and worth skinning?</h1>
+    <select id="i_area">
+      <option value="rainier" selected>Mt Rainier · Paradise</option>
+      <option value="stevens">Stevens Pass</option>
+      <option value="snoqualmie">Snoqualmie Pass</option>
+      <option value="baker">Mt Baker</option>
+      <option value="crystal">Crystal · Chinook</option>
+      <option value="enchantments">Leavenworth · Enchantments</option>
+      <option value="helens">Mt St Helens</option>
+      <option value="hood">Mt Hood</option>
+    </select>
+  </div>
+  <div id="status"></div>
+</header>
+<div id="map"></div>
+<div id="panel">
+  <details id="zones_d" open>
+    <summary class="sec" style="cursor:pointer">1 · Pick your neighborhood <span class="secnote" id="rank_note"></span></summary>
+    <div id="ranking"></div>
+  </details>
+  <details id="runs_d" open>
+    <summary class="sec" style="cursor:pointer">2 · Pick your line <span class="secnote" id="run_note"></span></summary>
+    <div id="runlist"></div>
+  </details>
+  <div class="sec">Storm
+    <button class="mode" id="m_live">Live</button>
+    <button class="mode" id="m_replay">Replay</button>
+    <input type="date" id="i_date" value="2026-03-10" min="2018-01-01">
+    <button class="mode" id="m_sim">Simulate</button>
+  </div>
+  <div class="row">
+    <div class="field"><label>New snow 48h · <span class="val" id="v_snow">14 in</span></label><input type="range" id="i_snow" min="0" max="80" value="35"></div>
+    <div class="field"><label>Wind · <span class="val" id="v_wind">20 mph</span></label><input type="range" id="i_wind" min="0" max="50" value="20"></div>
+    <div class="field"><label>Wind from · <span class="val" id="v_wdir">SW</span></label><input type="range" id="i_wdir" min="0" max="315" step="45" value="225"></div>
+    <div class="field"><label>Freezing level · <span class="val" id="v_fl">3300 ft</span></label><input type="range" id="i_fl" min="0" max="3200" step="100" value="1000"></div>
+    <div class="field"><label>Temp trend</label><select id="i_trend"><option value="cooling" selected>Cooling</option><option value="steady">Steady</option><option value="warming">Warming</option></select></div>
+    <div class="field"><label>Days since · sky</label><select id="i_agesky">
+      <option value="0,cloudy" selected>Storm day · cloudy</option>
+      <option value="1,cloudy">+1 day · cloudy</option>
+      <option value="1,clear">+1 day · sunny</option>
+      <option value="2,cloudy">+2 days · cloudy</option>
+      <option value="2,clear">+2 days · sunny</option>
+      <option value="3,cloudy">+3 days · cloudy</option>
+      <option value="3,clear">+3 days · sunny</option>
+    </select></div>
+  </div>
+  <div class="sec">Avalanche danger (manual · auto-NWAC in season)</div>
+  <div class="row">
+    <div class="field"><label>Below ~4000ft</label><select id="d_btl"><option value="1">1 Low</option><option value="2" selected>2 Moderate</option><option value="3">3 Considerable</option><option value="4">4 High</option></select></div>
+    <div class="field"><label>4000–6000ft</label><select id="d_ntl"><option value="1">1 Low</option><option value="2" selected>2 Moderate</option><option value="3">3 Considerable</option><option value="4">4 High</option></select></div>
+    <div class="field"><label>Above ~6000ft</label><select id="d_atl"><option value="1">1 Low</option><option value="2">2 Moderate</option><option value="3" selected>3 Considerable</option><option value="4">4 High</option></select></div>
+    <div class="field"><label>&nbsp;</label><span class="val" id="runcount"></span></div>
+  </div>
+  <div class="legend">
+    <span><span class="sw" style="background:#C9DEEA"></span> thin</span>
+    <span><span class="sw" style="background:#3D7EA6"></span> good</span>
+    <span><span class="sw" style="background:#17516F"></span> deep</span>
+    <span><span class="sw" style="background:#F7941E"></span> wind-loaded</span>
+    <span><span class="sw" style="background:#ED1C24"></span> gated</span>
+    <span><span class="sw" style="background:#B9C4CC;border-radius:0"></span> ascent/flat</span>
+  </div>
+  <div class="disc"><b>Prototype, not a forecast.</b> Routes are community OSM data (sparse in the PNW, GPX-hungry); aspect is estimated from the fall line; danger is your manual input applied region-wide until NWAC bulletin integration ships (replay uses past weather but NOT the past bulletin yet). Plan with the official <a href="https://nwac.us" style="color:var(--d4)">nwac.us</a> forecast, not with this.</div>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const ASP=["N","NE","E","SE","S","SW","W","NW"];
+const status={routes:"…",elev:"…",weather:"…",danger:"manual"};
+function paintStatus(){
+  $("status").innerHTML=Object.entries({Routes:status.routes,Elevation:status.elev,Weather:status.weather,Danger:status.danger})
+   .map(([k,v])=>{
+     const degraded=/fallback|sim|manual/.test(v);
+     const failed=/fail|unreachable|HTTP|timeout/i.test(v);
+     const c=degraded?"warn":failed?"err":/live|OSM|replay/.test(v)?"ok":"";
+     return `<span class="pill ${c}">${k}: ${v}</span>`}).join("");
+}
+paintStatus();
+
+// ---------- zones (ranking + map areas) ----------
+// wxElev = representative mid-mountain elevation for weather downscaling; top = highest common touring terrain
+// NWAC-style bands used throughout: BTL <~4000ft (1200m), NTL 4000-6000ft, ATL >~6000ft (1800m)
+const AREAS={
+ rainier:{label:"Mt Rainier · Paradise",bbox:"46.70,-121.95,46.95,-121.55",lat:46.80,lon:-121.73,wxElev:2200,top:3000},
+ stevens:{label:"Stevens Pass",bbox:"47.60,-121.35,47.90,-120.90",lat:47.75,lon:-121.09,wxElev:1400,top:1900},
+ snoqualmie:{label:"Snoqualmie Pass",bbox:"47.30,-121.70,47.55,-121.20",lat:47.43,lon:-121.42,wxElev:1200,top:1700},
+ baker:{label:"Mt Baker",bbox:"48.70,-121.95,49.00,-121.40",lat:48.85,lon:-121.66,wxElev:1500,top:2200},
+ crystal:{label:"Crystal · Chinook",bbox:"46.80,-121.70,47.05,-121.30",lat:46.93,lon:-121.48,wxElev:1700,top:2100},
+ enchantments:{label:"Leavenworth · Enchantments",bbox:"47.40,-121.05,47.65,-120.60",lat:47.52,lon:-120.82,wxElev:1800,top:2400},
+ helens:{label:"Mt St Helens",bbox:"46.10,-122.35,46.30,-122.05",lat:46.20,lon:-122.19,wxElev:1600,top:2500},
+ hood:{label:"Mt Hood",bbox:"45.25,-121.85,45.48,-121.55",lat:45.37,lon:-121.70,wxElev:1800,top:2700},
+};
+const FT=m=>Math.round(m*3.28084);
+const curArea=()=>$("i_area").value;
+
+const map=L.map('map',{zoomControl:false}).setView([46.80,-121.73],12);
+// two basemaps: Clean (default, quiet) and Terrain (topo, for planning the skin track)
+const baseClean=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:18,attribution:'© OpenStreetMap, © CARTO'});
+const baseTerrain=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:16,className:'terraintiles',attribution:'© OpenStreetMap, OpenTopoMap (CC-BY-SA)'});
+baseClean.addTo(map);
+const BaseCtl=L.Control.extend({onAdd(){
+  const d=L.DomUtil.create('div','basectl');
+  d.innerHTML='<button id="b_clean" class="on">Clean</button><button id="b_terrain">Terrain</button>';
+  L.DomEvent.disableClickPropagation(d);
+  return d;}});
+new BaseCtl({position:'topright'}).addTo(map);
+function setBase(which){
+  if(which==="clean"){map.removeLayer(baseTerrain);baseClean.addTo(map);}
+  else{map.removeLayer(baseClean);baseTerrain.addTo(map);}
+  $("b_clean").classList.toggle("on",which==="clean");
+  $("b_terrain").classList.toggle("on",which==="terrain");
+}
+setTimeout(()=>{ // buttons exist after control is added
+  $("b_clean").addEventListener("click",()=>setBase("clean"));
+  $("b_terrain").addEventListener("click",()=>setBase("terrain"));
+},0);
+
+// ---------- helpers ----------
+const R=6371000, rad=d=>d*Math.PI/180;
+function dist(a,b){const dLat=rad(b.lat-a.lat),dLon=rad(b.lon-a.lon);
+  const h=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));}
+function bearing(a,b){const y=Math.sin(rad(b.lon-a.lon))*Math.cos(rad(b.lat));
+  const x=Math.cos(rad(a.lat))*Math.sin(rad(b.lat))-Math.sin(rad(a.lat))*Math.cos(rad(b.lat))*Math.cos(rad(b.lon-a.lon));
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;}
+const adiff=(a,b)=>{let d=Math.abs(a-b)%360;return d>180?360-d:d;};
+const aspName=d=>ASP[Math.round(d/45)%8];
+function fetchT(url,ms){ // fetch with a real timeout
+  const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);
+  return fetch(url,{signal:c.signal}).finally(()=>clearTimeout(t));}
+function samplePath(pts,step){
+  const out=[pts[0]];let acc=0;
+  for(let i=1;i<pts.length;i++){acc+=dist(pts[i-1],pts[i]);if(acc>=step){out.push(pts[i]);acc=0;}}
+  if(out[out.length-1]!==pts[pts.length-1])out.push(pts[pts.length-1]);
+  while(out.length>24)out.splice(1,1);
+  return out;}
+
+// ---------- starter set: 3 PNW classics ----------
+// Real tours, real trailheads and summits; the LINES are hand-drawn approximations
+// (valley-accurate, not GPS tracks). Elevation is still fetched live per point,
+// so slope and aspect come from real terrain under the drawn line.
+// These three were chosen because their lines are famously simple and near-straight.
+const STARTER=[
+ {area:"rainier",name:"Muir Snowfield from Paradise · approx",pts:[[46.836,-121.731],[46.823,-121.729],[46.810,-121.729],[46.798,-121.731],[46.787,-121.735]]},
+ {area:"helens",name:"Worm Flows from Marble Mtn Sno-Park · approx",pts:[[46.1975,-122.181],[46.184,-122.176],[46.170,-122.168],[46.157,-122.164],[46.1465,-122.1652]]},
+ {area:"hood",name:"Hood south side from Timberline · approx",pts:[[45.3595,-121.7085],[45.345,-121.710],[45.331,-121.711]]},
+];
+
+// ---------- routes + elevation ----------
+let RUNS=[];
+const MIRRORS=[
+ "https://overpass-api.de/api/interpreter",
+ "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+ "https://overpass.kumi.systems/api/interpreter"];
+async function loadRoutes(area,areaKey){
+  // one query: skitour ways (capped 60) + named peaks and villages for orientation labels
+  const q=`[out:json][timeout:15];way["piste:type"="skitour"](${area.bbox});out geom 60;`
+    +`(node["natural"="peak"]["name"](${area.bbox});node["place"~"^(village|hamlet|town|locality)$"]["name"](${area.bbox}););out 250;`;
+  // race all mirrors in PARALLEL; first good answer wins, slow mirrors just lose
+  const attempts=MIRRORS.map(m=>(async()=>{
+    const r=await fetchT(m+"?data="+encodeURIComponent(q),12000);
+    if(!r.ok)throw new Error(new URL(m).hostname+" HTTP "+r.status);
+    const j=await r.json();
+    const els=j.elements||[];
+    const ways=els.filter(w=>w.type==="way"&&w.geometry&&w.geometry.length>3);
+    if(!ways.length)throw new Error("ZERO"); // valid answer, but let a fuller mirror win the race
+    const nodes=els.filter(n=>n.type==="node"&&n.tags&&n.tags.name);
+    return {m,ways,
+      peaks:nodes.filter(n=>n.tags.natural==="peak").map(n=>({name:n.tags.name,lat:n.lat,lon:n.lon,ele:+n.tags.ele||null})),
+      places:nodes.filter(n=>n.tags.place).map(n=>({name:n.tags.name,lat:n.lat,lon:n.lon}))};
+  })());
+  try{
+    const {m,ways:w0,peaks,places}=await Promise.any(attempts);
+    let ways=w0.sort((a,b)=>b.geometry.length-a.geometry.length).slice(0,30);
+    return {src:`OSM live · ${ways.length} · ${new URL(m).hostname}`,peaks,places,
+      runs:ways.map((w,i)=>({name:(w.tags&&(w.tags.name||w.tags.ref))||`Skitour ${i+1}`,
+        osmId:w.id, pts:w.geometry.map(g=>({lat:g.lat,lon:g.lon}))}))};
+  }catch(agg){
+    const errs=(agg.errors||[]).map(e=>e.message);
+    // every mirror answered "zero" -> genuinely unmapped box
+    if(errs.length&&errs.every(e=>e==="ZERO"))return {src:"OSM live · 0 routes mapped here",runs:[],peaks:[],places:[]};
+    const lastErr=errs.filter(e=>e!=="ZERO").slice(-1)[0]||"no response";
+    const stf=STARTER.filter(f=>f.area===areaKey);
+    if(stf.length)return {src:"starter set · approx lines (Overpass unreachable: "+lastErr+")",peaks:[],places:[],
+      runs:stf.map(f=>({name:f.name,approx:true,pts:f.pts.map(p=>({lat:p[0],lon:p[1]}))}))};
+    return {src:"unavailable ("+lastErr+")",runs:[],peaks:[],places:[]};
+  }
+}
+async function loadElev(runs){
+  try{
+    const all=[];runs.forEach(r=>{r.samples=samplePath(r.pts,180);r.samples.forEach(s=>all.push(s));});
+    for(let i=0;i<all.length;i+=100){
+      const chunk=all.slice(i,i+100);
+      const url=`https://api.open-meteo.com/v1/elevation?latitude=${chunk.map(p=>p.lat.toFixed(5)).join(",")}&longitude=${chunk.map(p=>p.lon.toFixed(5)).join(",")}`;
+      const r=await fetchT(url,15000); if(!r.ok)throw new Error("HTTP "+r.status);
+      const j=await r.json(); j.elevation.forEach((e,k)=>chunk[k].elev=e);
+      await new Promise(res=>setTimeout(res,250));
+    }
+    return "live · Open-Meteo";
+  }catch(e){
+    runs.forEach(r=>{r.samples.forEach((s,i)=>s.elev=2400-i*90);});
+    return "fallback synthetic ("+e.message+")";
+  }
+}
+function buildSegs(run){
+  let s=run.samples;
+  if(s[0].elev<s[s.length-1].elev)s=s.slice().reverse();
+  run.segs=[];
+  for(let i=0;i<s.length-1;i++){
+    const a=s[i],b=s[i+1],L=dist(a,b);if(L<20)continue;
+    const drop=a.elev-b.elev;
+    run.segs.push({a,b,len:L,elevTop:a.elev,drop,
+      slope:Math.atan2(Math.max(drop,0),L)*180/Math.PI,
+      aspect:bearing(a,b), ascent:drop<=2});
+  }
+}
+
+// ---------- weather: one fetch covers all 8 zones ----------
+const STORM_INPUTS=["i_snow","i_wind","i_wdir","i_fl","i_trend","i_agesky"];
+let mode="sim";            // "live" | "replay" | "sim"
+let ZWX=null;              // per-zone derived weather (live/replay); null in sim
+let wxGen=0;               // stale-response guard
+function setModeUI(){
+  $("m_live").classList.toggle("on",mode==="live");
+  $("m_replay").classList.toggle("on",mode==="replay");
+  $("m_sim").classList.toggle("on",mode==="sim");
+  STORM_INPUTS.forEach(id=>$(id).disabled=(mode!=="sim"));
+}
+function deriveParams(h,idx,zone){
+  const win=(arr,n)=>arr.slice(Math.max(0,idx-n+1),idx+1);
+  const snow48=win(h.snowfall,48).reduce((a,b)=>a+(b||0),0);
+  const spd=win(h.wind_speed_10m,6);const wind=spd.reduce((a,b)=>a+b,0)/(spd.length||1);
+  let x=0,y=0;win(h.wind_direction_10m,6).forEach(d=>{x+=Math.cos(rad(d));y+=Math.sin(rad(d));});
+  const wdir=(Math.round(((Math.atan2(y,x)*180/Math.PI+360)%360)/45)*45)%360;
+  const tArr=win(h.temperature_2m,6);const tNow=tArr.reduce((a,b)=>a+b,0)/(tArr.length||1);
+  const back=h.temperature_2m.slice(Math.max(0,idx-29),Math.max(0,idx-23));
+  const tOld=back.length?back.reduce((a,b)=>a+b,0)/back.length:tNow;
+  const trend=tNow-tOld<=-1?"cooling":tNow-tOld>=1?"warming":"steady";
+  let fl=(h.freezing_level_height&&h.freezing_level_height[idx]!=null)
+    ?h.freezing_level_height[idx]
+    :zone.wxElev+tNow/0.0065; // lapse-rate estimate: 6.5°C per 1000m
+  fl=Math.min(3200,Math.max(0,Math.round(fl/100)*100));
+  let hoursSince=72;
+  for(let i=idx;i>=0;i--){if(h.snowfall[i]>0.1){hoursSince=idx-i;break;}}
+  const age=Math.min(3,Math.floor(hoursSince/24));
+  const sky=(h.cloud_cover&&h.cloud_cover[idx]>=60)?"cloudy":"clear";
+  return{snow:Math.round(Math.min(80,snow48)),wind:Math.round(Math.min(50,wind)),
+    wdir:wdir===360?0:wdir,fl,trend,age,sky};
+}
+function fillControls(w){
+  $("i_snow").value=w.snow;$("i_wind").value=w.wind;$("i_wdir").value=w.wdir;$("i_fl").value=w.fl;
+  $("i_trend").value=w.trend;$("i_agesky").value=(w.age===0?"0,cloudy":w.age+","+w.sky);
+}
+async function fetchAllZoneWX(kind,dateStr){
+  const keys=Object.keys(AREAS);
+  const lat=keys.map(k=>AREAS[k].lat).join(","),lon=keys.map(k=>AREAS[k].lon).join(","),
+        elv=keys.map(k=>AREAS[k].wxElev).join(",");
+  const vars="snowfall,temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover";
+  let base;
+  if(kind==="live"){
+    base=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&elevation=${elv}`
+      +"&past_days=2&forecast_days=1&windspeed_unit=mph&timeformat=unixtime&timezone=UTC&hourly=";
+  }else{
+    // HRRR/NBM/GFS archived model runs (3km over CONUS, back to 2018) - far sharper than ERA5 reanalysis
+    const d=new Date(dateStr+"T00:00:00Z");d.setUTCDate(d.getUTCDate()-3);
+    base=`https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&elevation=${elv}`
+      +`&start_date=${d.toISOString().slice(0,10)}&end_date=${dateStr}&windspeed_unit=mph&timeformat=unixtime&timezone=UTC&hourly=`;
+  }
+  // try with freezing_level_height; if rejected, retry without (lapse estimate kicks in)
+  let r=await fetchT(base+vars+",freezing_level_height",15000);
+  if(!r.ok)r=await fetchT(base+vars,15000);
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const j=await r.json();if(j.error)throw new Error(j.reason||"weather error");
+  const arr=Array.isArray(j)?j:[j];
+  const target=kind==="live"?Date.now()/1000:Date.parse(dateStr+"T06:00:00Z")/1000; // 06:00 ≈ morning decision
+  const out={};
+  arr.forEach((res,i)=>{
+    const h=res.hourly;let idx=h.time.length-1;
+    for(let t=h.time.length-1;t>=0;t--){if(h.time[t]<=target){idx=t;break;}}
+    out[keys[i]]=deriveParams(h,idx,AREAS[keys[i]]);
+  });
+  return out;
+}
+async function applyLiveWeather(){
+  const g=++wxGen;mode="live";setModeUI();
+  status.weather="fetching…";paintStatus();
+  try{
+    const all=await fetchAllZoneWX("live");
+    if(g!==wxGen)return;
+    ZWX=all;fillControls(ZWX[curArea()]);
+    status.weather="live · Open-Meteo · 8 zones";
+  }catch(e){
+    if(g!==wxGen)return;
+    mode="sim";setModeUI();ZWX=null;
+    status.weather="sim (live failed: "+e.message+")";
+  }finally{if(g===wxGen){paintStatus();render();}}
+}
+async function applyReplay(){
+  const g=++wxGen;mode="replay";setModeUI();
+  const dateStr=$("i_date").value;
+  if(!dateStr){applySim();return;}
+  status.weather="fetching archive…";paintStatus();
+  try{
+    const all=await fetchAllZoneWX("replay",dateStr);
+    if(g!==wxGen)return;
+    ZWX=all;fillControls(ZWX[curArea()]);
+    status.weather="replay "+dateStr+" · HRRR archive · 8 zones";
+  }catch(e){
+    if(g!==wxGen)return;
+    mode="sim";setModeUI();ZWX=null;
+    status.weather="sim (replay failed: "+e.message+")";
+  }finally{if(g===wxGen){paintStatus();render();}}
+}
+function applySim(){wxGen++;mode="sim";setModeUI();ZWX=null;status.weather="sim";paintStatus();render();}
+$("m_live").addEventListener("click",applyLiveWeather);
+$("m_replay").addEventListener("click",applyReplay);
+$("m_sim").addEventListener("click",applySim);
+$("i_date").addEventListener("change",applyReplay);
+
+// ---------- scoring (0–100 per segment) ----------
+const label=s=>s>=75?"Call in sick":s>=55?"Worth the skin":s>=40?"Fine, not special":"Save your legs";
+function band(e){return e>=1800?"ATL":e>=1200?"NTL":"BTL";}
+function scoreSeg(g,P){
+  if(g.ascent)return{score:-1,cls:"ascent"};
+  let s=Math.min(P.snow,60)/60*55;                       // snow base: up to 55, maxes at 60cm
+  s+=P.trend==="cooling"?15:P.trend==="steady"?5:-12;    // right-side-up bonus
+  const northish=adiff(g.aspect,0)<=45||adiff(g.aspect,315)<=22;
+  s-=Math.max(0,P.age-0)*(northish?2.5:4.5);             // aging, slower in the shade
+  if(P.sky==="clear"&&P.age>=1&&adiff(g.aspect,180)<=60)s-=7*Math.min(P.age,4); // sun cooks S faces
+  if(P.fl>=g.elevTop)s-=25;else if(P.fl>=g.elevTop-150)s-=10;
+  let loaded=false;
+  if(P.wind>=10){
+    const str=P.wind>=25?1:(P.wind-10)/15, bd=band(g.elevTop), shelter=bd==="BTL"?0.4:1;
+    if(adiff(g.aspect,P.wdir)<=60)s-=28*str*shelter;     // windward scoured
+    if(adiff(g.aspect,(P.wdir+180)%360)<=60){ if(bd!=="BTL"){s+=16*str;loaded=true;} else s+=6*str; }
+  }
+  if(g.slope<15)s*=0.5;
+  if(g.slope>45)s-=15;
+  s=Math.max(0,Math.min(100,Math.round(s)));
+  const d=P.danger[band(g.elevTop)];
+  let gated=d>=4||(d===3&&loaded);
+  return{score:s,loaded,gated,cls:gated?"gated":loaded?"loaded":"pow"};
+}
+const colorFor=r=>r.cls==="ascent"?"#B9C4CC":r.gated?"#ED1C24":
+  `hsl(204,${35+45*r.score/100}%,${80-45*r.score/100}%)`;
+
+// ---------- neighborhood ranking (v0.1 rose logic per zone) ----------
+function zoneScore(key,wx,danger){
+  const z=AREAS[key];
+  const bands=[900,1500,z.top-200];
+  let best=null;const open=[];
+  bands.forEach(el=>{
+    if(el>z.top)return;
+    for(let a=0;a<360;a+=45){
+      const r=scoreSeg({elevTop:el,aspect:a,slope:30,drop:100,ascent:false},{...wx,danger});
+      if(!r.gated){open.push(r.score);
+        if(!best||r.score>best.score)best={score:r.score,aspect:a,elev:el};}
+    }
+  });
+  return{best,avg:open.length?Math.round(open.reduce((s,v)=>s+v,0)/open.length):0,
+    allGated:!open.length,snow:wx.snow};
+}
+function renderRanking(p){
+  const rows=Object.keys(AREAS).map(k=>({k,...zoneScore(k,(ZWX&&ZWX[k])||p,p.danger)}))
+    .sort((a,b)=>(b.best?b.best.score:0)-(a.best?a.best.score:0));
+  $("rank_note").textContent=ZWX
+    ?"per-zone weather · your danger dropdowns applied Tirol-wide"
+    :"sim: same storm everywhere · terrain differences only";
+  $("ranking").innerHTML=rows.map((r,i)=>{
+    const s=r.best?r.best.score:0, cur=r.k===curArea();
+    return `<div class="rrow${cur?" cur":""}" data-k="${r.k}">
+      <span class="rname">${i+1}. ${AREAS[r.k].label}</span>
+      <span class="rbar"><span style="width:${s}%;background:${r.allGated?"#ED1C24":"#3D7EA6"}"></span></span>
+      <span class="rmeta">${r.allGated
+        ?"all aspects gated by danger"
+        :`${s}/100 · ${label(s)} · best ${aspName(r.best.aspect)} ~${FT(r.best.elev)}ft · avg ${r.avg}`} · ${Math.round(r.snow/2.54)}in/48h</span>
+    </div>`}).join("");
+  document.querySelectorAll(".rrow").forEach(el=>el.addEventListener("click",()=>{
+    if(el.dataset.k!==curArea()){$("i_area").value=el.dataset.k;$("i_area").dispatchEvent(new Event("change"));}
+  }));
+}
+
+// ---------- render ----------
+let layerGroup=L.layerGroup().addTo(map);
+function P(){
+  const [age,sky]=$("i_agesky").value.split(",");
+  return{snow:+$("i_snow").value,wind:+$("i_wind").value,wdir:+$("i_wdir").value,
+    fl:+$("i_fl").value,trend:$("i_trend").value,age:+age,sky,
+    danger:{BTL:+$("d_btl").value,NTL:+$("d_ntl").value,ATL:+$("d_atl").value}};
+}
+function render(){
+  const p=P();
+  $("v_snow").textContent=Math.round(p.snow/2.54)+" in";$("v_wind").textContent=p.wind+" mph";
+  $("v_wdir").textContent=aspName(p.wdir);$("v_fl").textContent=FT(p.fl)+" ft";
+  layerGroup.clearLayers();
+  const stats=[];
+  RUNS.forEach((run,runIdx)=>{
+    const res=run.segs.map(g=>({g,r:scoreSeg(g,p)}));
+    const ski=res.filter(x=>x.r.score>=0);
+    const avg=ski.length?Math.round(ski.reduce((s,x)=>s+x.r.score,0)/ski.length):0;
+    const top=ski.slice(0,Math.ceil(ski.length/3)), bot=ski.slice(-Math.ceil(ski.length/3));
+    const tAvg=a=>a.length?Math.round(a.reduce((s,x)=>s+x.r.score,0)/a.length):0;
+    const gatedSegs=ski.filter(x=>x.r.gated).length;
+    res.forEach(({g,r})=>{
+      const coords=[[g.a.lat,g.a.lon],[g.b.lat,g.b.lon]];
+      if(r.cls!=="ascent") // white casing under ski segments so lines pop on any basemap
+        L.polyline(coords,{color:"#fff",weight:9,opacity:.9}).addTo(layerGroup);
+      const pl=L.polyline(coords,
+        {color:colorFor(r),weight:r.cls==="ascent"?3:6,opacity:.95,
+         dashArray:r.cls==="ascent"?"4 6":null});
+      if(r.loaded&&!r.gated)pl.setStyle({color:"#F7941E"});
+      pl.addTo(layerGroup);
+    });
+    const tops=run.segs[0], ends=run.segs[run.segs.length-1];
+    const vert=Math.round(run.segs.reduce((s,g)=>s+Math.max(g.drop,0),0));
+    const marker=L.circleMarker([tops.a.lat,tops.a.lon],{radius:7,color:"#17516F",fillColor:"#fff",fillOpacity:1,weight:2}).addTo(layerGroup);
+    marker.bindPopup(`<b>${run.name}</b><br>
+      ${run.start||run.summit?`${run.start?"start: "+run.start:""}${run.start&&run.summit?" · ":""}${run.summit?"summit: "+run.summit:""}<br>`:""}
+      ${FT(tops.elevTop)}ft → ${FT(ends.b.elev)}ft · ${FT(vert)}ft vert<br>
+      Overall <b>${avg}/100</b> · top ${tAvg(top)} / exit ${tAvg(bot)}
+      <div class="verdict">${
+        gatedSegs?`<span class="gatenote">⚠ ${gatedSegs} segment(s) gated by danger.</span><br>`:""}
+        Top: <b>${label(tAvg(top))}</b> · Exit: ${label(tAvg(bot))}${p.fl>=ends.b.elev?" (below freezing level, expect mank)":""}
+      </div>${run.osmId?`<a href="https://www.openstreetmap.org/way/${run.osmId}" target="_blank" rel="noopener">View route on OpenStreetMap ↗</a>`:""}`);
+    stats.push({idx:runIdx,name:run.name,avg,vert,gatedSegs,osmId:run.osmId,run,
+      elevTop:tops.elevTop,elevBot:ends.b.elev,marker,
+      bounds:L.latLngBounds(run.samples.map(s=>[s.lat,s.lon]))});
+  });
+  $("runcount").textContent=RUNS.length+" runs scored";
+  renderRunList(stats);
+  renderRanking(p);
+}
+function gpxFor(run){ // full OSM geometry, generated client-side
+  const esc=t=>t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const pts=run.pts.map(p=>`<trkpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"/>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Powder Lines" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>${esc(run.name)}</name><trkseg>${pts}</trkseg></trk></gpx>`;
+}
+function dlGpx(run){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([gpxFor(run)],{type:"application/gpx+xml"}));
+  a.download=run.name.replace(/[^\w]+/g,"_")+".gpx";a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function renderRunList(stats){
+  stats.sort((a,b)=>b.avg-a.avg);
+  $("run_note").textContent=stats.length?stats.length+" runs · click to zoom":"no runs loaded";
+  $("runlist").innerHTML=stats.length?stats.map((s,i)=>`
+    <div class="rrow runrow" data-i="${s.idx}">
+      <span class="rname">${i+1}. ${s.name}</span>
+      <span class="rbar"><span style="width:${s.avg}%;background:${s.gatedSegs?"#ED1C24":"#3D7EA6"}"></span></span>
+      <span class="rmeta">${s.avg}/100 · ${label(s.avg)} · ${FT(s.vert)}ft vert · ${FT(s.elevTop)}→${FT(s.elevBot)}ft${s.gatedSegs?` · ⚠ ${s.gatedSegs} gated`:""}</span>
+      <span class="rmeta">${[s.run.start?"start: "+s.run.start:null,s.run.summit?"summit: "+s.run.summit:null].filter(Boolean).join(" · ")}${(s.run.start||s.run.summit)?" · ":""}${
+        s.osmId?`<a class="rlink" href="https://www.openstreetmap.org/way/${s.osmId}" target="_blank" rel="noopener">OSM ↗</a> · <a class="rlink gpxl" href="#" data-i="${s.idx}">GPX ↓</a>`
+        :"approx line · no GPX"}</span>
+    </div>`).join("")
+   :`<div class="rmeta" style="padding:4px 6px">No runs loaded. Routes pill says: "${status.routes}" — "0 routes mapped here" = OSM has no skitour lines in this box; "unavailable" = the route server couldn't be reached from your browser.</div>`;
+  document.querySelectorAll(".runrow").forEach(el=>el.addEventListener("click",()=>{
+    const s=stats.find(x=>x.idx==+el.dataset.i);if(!s)return;
+    map.fitBounds(s.bounds.pad(0.25));s.marker.openPopup();
+  }));
+  document.querySelectorAll(".rlink").forEach(el=>el.addEventListener("click",e=>{
+    e.stopPropagation(); // links shouldn't also trigger the row's zoom
+    if(el.classList.contains("gpxl")){e.preventDefault();
+      const s=stats.find(x=>x.idx==+el.dataset.i);if(s)dlGpx(s.run);}
+  }));
+}
+document.querySelectorAll("#panel input,#panel select").forEach(el=>{
+  el.addEventListener("input",e=>{if(e.target.id!=="i_date")render();});
+});
+
+// ---------- boot + area switching (generation counter kills the Sellrain-snapback race) ----------
+let loadGen=0;
+async function loadArea(){
+  const gen=++loadGen, key=curArea(), area=AREAS[key];
+  status.routes="…";status.elev="…";paintStatus();
+  layerGroup.clearLayers();$("runcount").textContent="loading…";
+  let osmDone=false;
+  const stDefs=STARTER.filter(f=>f.area===key);
+  if(stDefs.length){ // instant starter set so the screen is never empty while OSM races
+    const st=stDefs.map(f=>({name:f.name,approx:true,pts:f.pts.map(p=>({lat:p[0],lon:p[1]}))}));
+    loadElev(st).then(()=>{
+      if(gen!==loadGen||osmDone)return;
+      st.forEach(buildSegs);
+      const ok=st.filter(r=>r.segs.length>2);
+      if(ok.length&&!osmDone){RUNS=ok;status.routes="starter set · OSM loading…";paintStatus();render();}
+    });
+  }
+  const {src,runs,peaks,places}=await loadRoutes(area,key);
+  osmDone=true;
+  if(gen!==loadGen)return;              // a newer area switch happened; discard this result
+  status.routes=src;paintStatus();
+  if(!runs.length){                     // honest empty state: stay on the chosen area, don't jump anywhere
+    RUNS=[];status.elev="–";paintStatus();
+    render();
+    $("runcount").textContent="no mapped skitour routes here yet (the ranking above still scores this zone)";
+    return;
+  }
+  const elevSrc=await loadElev(runs);
+  if(gen!==loadGen)return;
+  status.elev=elevSrc;paintStatus();
+  runs.forEach(buildSegs);
+  RUNS=runs.filter(r=>r.segs.length>2);
+  // orientation for strangers: nearest named peak to the top, nearest village to the exit
+  const nearest=(list,pt,maxM)=>{let best=null,bd=maxM;
+    (list||[]).forEach(o=>{const d=dist(o,pt);if(d<bd){bd=d;best=o;}});return best;};
+  RUNS.forEach(r=>{
+    const top=r.segs[0].a, bot=r.segs[r.segs.length-1].b;
+    const pk=nearest(peaks,top,1500), pl=nearest(places,bot,4000);
+    r.summit=pk?pk.name+(pk.ele?` (${FT(pk.ele)}ft)`:""):null;
+    r.start=pl?pl.name:null;
+    if(/^Skitour \d+$/.test(r.name)){ // unnamed OSM way: build a name from real geography
+      const ski=r.segs.filter(g=>!g.ascent);
+      let facing="";
+      if(ski.length){let x=0,y=0;ski.forEach(g=>{x+=Math.cos(rad(g.aspect))*g.len;y+=Math.sin(rad(g.aspect))*g.len;});
+        facing=aspName((Math.atan2(y,x)*180/Math.PI+360)%360);}
+      if(pl&&pk)r.name=`${pl.name} → ${pk.name}${facing?" · "+facing:""}`;
+      else if(pk)r.name=`${pk.name}${facing?" · "+facing+" line":""}`;
+      else if(facing)r.name+=" · "+facing+" facing";
+    }});
+  if(RUNS.length){                      // only reframe the map when we actually have lines in THIS area
+    const b=L.latLngBounds(RUNS.flatMap(r=>r.samples.map(s=>[s.lat,s.lon])));
+    if(b.isValid())map.fitBounds(b.pad(0.1));
+  }
+}
+$("i_area").addEventListener("change",async()=>{
+  const p=AREAS[curArea()];
+  map.setView([p.lat,p.lon],12);
+  const done=loadArea();
+  if(mode==="live"){/* weather already cached per zone */ if(ZWX)fillControls(ZWX[curArea()]);}
+  else if(mode==="replay"){if(ZWX)fillControls(ZWX[curArea()]);}
+  await done;
+  render();
+});
+(async()=>{
+  await loadArea();
+  const m=new Date().getMonth(); // bulletin season (Nov–May): boot live; summer: boot replay
+  if([10,11,0,1,2,3,4].includes(m)){applyLiveWeather();}else{applyReplay();}
+})();
+</script>
+</body>
+</html>
